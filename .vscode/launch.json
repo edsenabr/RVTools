@@ -1,0 +1,37 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "price_loader",
+            "type": "python",
+            "request": "launch",
+            "program": "price_loader.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-r",
+                "southamerica-east1",
+                "us-east1"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "estimate_rvtools",
+            "type": "python",
+            "request": "launch",
+            "program": "estimate_rvtools.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-r",
+                "southamerica-east1",
+                "us-east1",
+                "-s",
+                "RVTools_Hml.xlsx",
+                "RVTools_Prod.xlsx"
+            ],
+            "justMyCode": true
+        }
+    ]
+}

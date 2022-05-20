@@ -1,0 +1,6 @@
+__pycache__/*
+env/*
+*.csv
+*.xls*
+_oldstuff/*
+test.py
