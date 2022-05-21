@@ -67,8 +67,9 @@ def process_row(sheet, row_index, row, regions):
 initial_row_offset=3
 region_spacer=3
 
-def get_gcve_offset(regions_qtty, header=False):
-    return initial_row_offset + (regions_qtty * (12 + region_spacer)) + (2 if not header else 0)
+def get_gcve_offset(regions_qtty, books_qtty, header=False):
+    region_rows = 3 + (3 if books_qtty == 1 else (3 * (books_qtty+1)))
+    return initial_row_offset + (regions_qtty * (region_rows + region_spacer)) + (2 if not header else 0)
 
 def write_book_header(sheet, regions, regions_qtty):
     sheet.append([
@@ -213,7 +214,7 @@ def add_region_header(sheet, region_index, region_name):
 def get_region_color(region_index):
     return  ['DEE7E5', 'DEDCE6', 'F6F9D4'][region_index % 3]
 
-def add_book_info(sheet, book_index, book_name, region_index, region_name, regions_qtty):
+def add_book_info(sheet, book_index, book_name, region_index, region_name, regions_qtty, books_qtty):
     gcve_price = price_list.get_gcve_price(region_name)
     if gcve_price is None:
         gcve_price = {"od": "NA()", "cud1y": "NA()", "cud3y":"NA()"}
@@ -231,7 +232,7 @@ def add_book_info(sheet, book_index, book_name, region_index, region_name, regio
     }
 
     start_colum = 6 + (region_index*10)
-    gcve_offset = get_gcve_offset(regions_qtty) +  book_index
+    gcve_offset = get_gcve_offset(regions_qtty, books_qtty) +  book_index
 
     header = CellFormat(sheet).header(get_region_color(region_index))
     first_row = sheet.max_row + 1
@@ -348,7 +349,7 @@ def read_books(books, regions):
     for region_index, region_name in enumerate(regions):
         add_region_header(summary, region_index, region_name)
         for book_index, book_name in enumerate(books):
-            add_book_info(summary, book_index, book_name, region_index, region_name, regions_qtty)
+            add_book_info(summary, book_index, book_name, region_index, region_name, regions_qtty, books_qtty)
         add_region_footer(summary, books_qtty, region_index)
 
     # add the gcve table to the Summary sheet
