@@ -1,7 +1,5 @@
 from __future__ import annotations
 import openpyxl
-from timebudget import timebudget
-timebudget.set_quiet()  # don't show measurements as they happen
 
 
 class CellFormat:
@@ -22,7 +20,6 @@ class CellFormat:
         return self.colors[color]
 
 
-    @timebudget
     def __init__(self, sheet=None):
         self.has_border = False
         self.is_centered = False
@@ -35,64 +32,48 @@ class CellFormat:
         if not sheet is None:
             self.sheet = sheet
 
-    @timebudget
     def border(self, color:str="000000") -> CellFormat:
         self.has_border = True
         return self
 
-    @timebudget
     def color(self, color:str) -> CellFormat:
         if not color is None:
             self.fill_color = self.get_color(color)
         return self
 
-    @timebudget
     def value(self, value:str) -> CellFormat:
         cell = openpyxl.cell.cell.Cell(self.sheet, column=1, row=1, value=value)
         return self.apply(cell)
 
-    @timebudget
-    def alternate_color(self, index:int) -> CellFormat:
-        if not (index % 2):
-            return self.color('EEEEEE')
-        return self
-
-    @timebudget
     def center(self) -> CellFormat:
         self.is_centered = True
         return self
 
-    @timebudget
     def bold(self) -> CellFormat:
         self.is_bold = True
         return self
 
-    @timebudget
     def currency(self) -> CellFormat:
         self.is_currency = True
         self.is_gb = False
         self.is_tb = False
         return self
 
-    @timebudget
     def gb(self) -> CellFormat:
         self.is_currency = False
         self.is_gb = True
         self.is_tb = False
         return self
 
-    @timebudget
     def tb(self) -> CellFormat:
         self.is_currency = False
         self.is_gb = False
         self.is_tb = True
         return self
 
-    @timebudget
-    def header(self, color:str) -> CellFormat:
+    def header(self, color:str=None) -> CellFormat:
         return self.border().bold().center().color(color)
 
-    @timebudget
     def apply(self, cell):
         if (self.is_bold):
             cell.font = self.bold_font
@@ -120,14 +101,13 @@ class CellFormat:
 
         return cell
 
-    @timebudget
-    def generator(self, sheet, row):
-        for index, cell in enumerate(row):
+    def generator(self, row):
+        for value in row:
             yield self.apply(
                 openpyxl.cell.cell.Cell(
-                    sheet, 
+                    self.sheet, 
                     column="A", 
                     row=1, 
-                    value=cell
+                    value=value
                 )
             )
