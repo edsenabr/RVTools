@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import math
 from operator import itemgetter
-from time import time
 import requests
 import re
 from bs4 import BeautifulSoup
@@ -423,9 +422,9 @@ class PriceList:
         custom = [{
             'name': "%s-custom-%s-%s" % (custom['name'], self.get_cpu(custom, cpu), self.get_memory(custom, cpu, mem)), 
             'spot': custom["vcpus_spot"]*self.get_cpu(custom, cpu) + custom["memory_spot"]*self.get_memory(custom, cpu, mem), 
-            'od': custom["vcpus_od"]*self.get_cpu(custom, cpu) + custom["memory_od"]*self.get_memory(custom, cpu, mem), 
-            'cud1y': custom["vcpus_cud1y"]*self.get_cpu(custom, cpu) + custom["memory_cud1y"]*self.get_memory(custom, cpu, mem), 
-            'cud3y': custom["vcpus_cud3y"]*self.get_cpu(custom, cpu) + custom["memory_cud3y"]*self.get_memory(custom, cpu, mem)
+            'od': round((custom["vcpus_od"]*self.get_cpu(custom, cpu) + custom["memory_od"]*self.get_memory(custom, cpu, mem)),2), 
+            'cud1y': round((custom["vcpus_cud1y"]*self.get_cpu(custom, cpu) + custom["memory_cud1y"]*self.get_memory(custom, cpu, mem)),2), 
+            'cud3y': round((custom["vcpus_cud3y"]*self.get_cpu(custom, cpu) + custom["memory_cud3y"]*self.get_memory(custom, cpu, mem)),2)
         } for custom in sorted(
             self.lists['custom'],
             key=itemgetter('vcpus_cud1y' if cud else 'vcpus_od')
