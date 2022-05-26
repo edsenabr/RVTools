@@ -22,8 +22,15 @@ def get_parser(h):
     parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=False)
     return parser
 
-def process_row(sheet, row_index, row, regions):
-    [vm, cpus, memory, disk, os_conf, os_tools] = operator.itemgetter(0, 14, 15, 38, 71, 72)(row)
+def process_row(sheet, row_index, row, regions, columns):
+    [vm, cpus, memory, disk, os_conf, os_tools] = operator.itemgetter(
+        columns['VM'], 
+        columns['CPUs'], 
+        columns['Memory'], 
+        columns['Unshared MB'], 
+        columns['OS according to the configuration file'], 
+        columns['OS according to the VMware Tools']
+    )(row)
     disk = max(10, round(disk/1024, 2))
 
     os = os_conf or os_tools
@@ -334,12 +341,17 @@ def read_books(books, regions):
     # write one sheet per rvtools book to the target workbook
     for book_name in books:
         book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
+        columns = {}
         sheet = output.create_sheet(book_name)
         write_book_header(sheet, regions, regions_qtty)
         with timebudget('input_row'):
             input_sheet = book['vInfo']
-            for row_index, row in enumerate(tqdm(input_sheet.iter_rows(min_row=2, min_col=1, max_col=74, values_only=True), desc=book_name, total=input_sheet.max_row)):
-                process_row(sheet, row_index, row, regions)
+            for row_index, row in enumerate(tqdm(input_sheet.iter_rows(values_only=True), desc=book_name, total=input_sheet.max_row)):
+                if (row_index == 0): #header
+                    for index, column in enumerate(row):
+                        columns[column] = index
+                else:
+                    process_row(sheet, row_index, row, regions, columns)
         fit_sheet_columns(sheet)
 
     add_summary_disclamers(summary, ['*** on-demand prices includes sustained use discounts ***'])
