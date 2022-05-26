@@ -9,6 +9,7 @@ from threading import Thread
 import argparse
 from tqdm import tqdm
 from timebudget import timebudget
+timebudget.set_quiet()  # don't show measurements as they happen
 
 windows = re.compile('.*windows.*', re.IGNORECASE)
 sles = re.compile('.*SUSE.*', re.IGNORECASE)
@@ -75,7 +76,10 @@ ignored_frames = [
 ]
 
 ignored_families = [
-    'n1', 'e2', 'g1', 'f1'
+    'g1', 'f1'
+]
+shared_types = [
+    'e2-micro', 'e2-small', 'e2-medium'
 ]
 
 NUM_FETCH_THREADS = 50
@@ -178,12 +182,16 @@ class Frame:
 
     # https://cloud.google.com/compute/docs/machine-types#machine_type_comparison
     # Machine series	            vCPUs	Memory (per vCPU)
+    # E2 General-purpose            2–32	0.5–8 GB
+    # N1 General-purpose	        1–96	0.9–6.5 GB
     # N2 General-purpose	        2–128	0.5–8 GB
     # N2D General-purpose	        2–224	0.5–8 GB
 
     cpu_ratio= {
-        "n2":  {"cpu_min": 2, "cpu_max": 128,"memory_min": 0.5, "memory_max": 8},
-        "n2d": {"cpu_min": 2, "cpu_max": 224,"memory_min": 0.5, "memory_max": 8}
+        "e2":  {"cpu_min": 2, "cpu_max": 32, "memory_min": 0.5, "memory_max": 8  },
+        "n1":  {"cpu_min": 1, "cpu_max": 96, "memory_min": 0.9, "memory_max": 6.5},
+        "n2":  {"cpu_min": 2, "cpu_max": 128,"memory_min": 0.5, "memory_max": 8  },
+        "n2d": {"cpu_min": 2, "cpu_max": 224,"memory_min": 0.5, "memory_max": 8  }
     }
 
     @timebudget
@@ -250,6 +258,9 @@ class Frame:
             if (not is_predefined(name)):
                 continue
 
+            if name in shared_types:
+                continue
+
             match = re.match("^([a-z0-9]{2,3})(_|-).+$",name)
             family_name = match.group(1) if match else None
             if family_name in ignored_families:
@@ -293,6 +304,14 @@ class PriceList:
         self.load_initial_data()
         self.load_frames()
         self.fill_empty_prices()
+
+    def count(self):
+        return "loaded {predefined} standard types, {custom} custom types, {disk} disk prices and {os} O.S. prices.".format(
+            predefined=len(self.lists['predefined']),
+            custom=len(self.lists['custom']),
+            disk=len(self.lists['disk']),
+            os=len(self.images)
+        )
 
     def find_id(self, frame):
         return [sibling['id'] for sibling in frame.parent.find_previous_siblings() if (
@@ -393,15 +412,27 @@ class PriceList:
 
         return prices
 
-    def select_price(self, commit, cpus, memory, region):
+    @timebudget
+    def select_price(self, commit, cpus, memory, region, verbose=False):
         cpu = math.ceil(cpus)
         mem = math.ceil(memory/1024)
 
+        if verbose:
+            print('commit:\t\t`{commit}`'.format(commit=commit))
         predefined = self.get_predefined_type(commit, region, cpu, mem)
         custom_family = self.get_custom_family(region, cpu, mem, True)
         if not custom_family is None:
+            if verbose:
+                print('predefined:\t`{name}` costs ${price}'.format(name=predefined['name'], price=predefined[commit]))
+                print('custom:\t\t`{name}` costs ${price}'.format(name=custom_family['name'], price=custom_family[commit]))
             if custom_family[commit] < predefined[commit]:
-                predefined.update(custom_family)
+                if verbose:
+                    print('cheaper:\tcustom\n')
+                    return custom_family
+            elif verbose:
+                    print('cheaper:\tpredefined\n')
+        elif verbose:
+            print('custom:\t\tnone found; too big?\n')
         return predefined
 
 
@@ -412,29 +443,37 @@ class PriceList:
         )][0]
 
     def get_cpu(self, custom, cpu):
-        return max(cpu, custom["cpu_min"])
+        return int(max(cpu, custom["cpu_min"]))
 
     def get_memory(self, custom, cpu, mem):
-        return max(mem, self.get_cpu(custom, cpu)*custom['memory_min'])
+        return int(max(mem, math.ceil(self.get_cpu(custom, cpu)*custom['memory_min'])))
+
+    @timebudget
+    def get_custom_families(self, region:str, cpu:int, mem:int, cud:bool=False) -> dict:
+        return sorted(
+            [{
+                "family": custom['name'],
+                'name': "%s-custom-%s-%s" % (custom['name'], self.get_cpu(custom, cpu), self.get_memory(custom, cpu, mem)), 
+                "cpus": self.get_cpu(custom, cpu),
+                "memory": self.get_memory(custom, cpu, mem),
+                "region": region,
+                'spot': custom["vcpus_spot"]*self.get_cpu(custom, cpu) + custom["memory_spot"]*self.get_memory(custom, cpu, mem), 
+                'od': round((custom["vcpus_od"]*self.get_cpu(custom, cpu) + custom["memory_od"]*self.get_memory(custom, cpu, mem)),2), 
+                'cud1y': round((custom["vcpus_cud1y"]*self.get_cpu(custom, cpu) + custom["memory_cud1y"]*self.get_memory(custom, cpu, mem)),2), 
+                'cud3y': round((custom["vcpus_cud3y"]*self.get_cpu(custom, cpu) + custom["memory_cud3y"]*self.get_memory(custom, cpu, mem)),2)
+            } for custom in self.lists['custom'] if (
+                custom["region"] == region and 
+                custom["cpu_max"] >= self.get_cpu(custom, cpu) and 
+                custom["memory_max"] >= self.get_memory(custom, cpu, mem) / self.get_cpu(custom, cpu)
+            )],
+            key=itemgetter('cud1y' if cud else 'od')
+        )
 
     def get_custom_family(self, region:str, cpu:int, mem:int, cud:bool=False) -> dict:
-        ratio = mem/cpu
-        custom = [{
-            'name': "%s-custom-%s-%s" % (custom['name'], self.get_cpu(custom, cpu), self.get_memory(custom, cpu, mem)), 
-            'spot': custom["vcpus_spot"]*self.get_cpu(custom, cpu) + custom["memory_spot"]*self.get_memory(custom, cpu, mem), 
-            'od': round((custom["vcpus_od"]*self.get_cpu(custom, cpu) + custom["memory_od"]*self.get_memory(custom, cpu, mem)),2), 
-            'cud1y': round((custom["vcpus_cud1y"]*self.get_cpu(custom, cpu) + custom["memory_cud1y"]*self.get_memory(custom, cpu, mem)),2), 
-            'cud3y': round((custom["vcpus_cud3y"]*self.get_cpu(custom, cpu) + custom["memory_cud3y"]*self.get_memory(custom, cpu, mem)),2)
-        } for custom in sorted(
-            self.lists['custom'],
-            key=itemgetter('vcpus_cud1y' if cud else 'vcpus_od')
-        ) if (
-            custom["region"] == region and 
-            custom["cpu_max"] >= cpu and 
-            custom["memory_max"] >= ratio
-        )]
+        custom = self.get_custom_families(region, cpu, mem, cud)
         return None if len(custom) == 0 else custom[0]
 
+    @timebudget
     def get_predefined_type(self, commit:str, region:str, cpu:int, mem:int):
         return [predefined for predefined in sorted(
             self.lists['predefined'],
