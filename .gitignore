@@ -4,3 +4,4 @@ env/*
 *.xls*
 _oldstuff/*
 test.py
+price_loader.json
