@@ -32,6 +32,22 @@
                 "RVTools_Prod.xlsx"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "menu",
+            "type": "python",
+            "request": "launch",
+            "program": "menu.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-r",
+                "us-east1",
+                "southamerica-east1"
+            ],
+            "env": {
+                "GOOGLE_APPLICATION_CREDENTIALS": "/data/edsena/_wfolder/sa-keys/edsena-01-3ebc0b8fde24.json"
+            },
+            "justMyCode": true
         }
     ]
 }
