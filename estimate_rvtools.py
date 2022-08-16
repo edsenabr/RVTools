@@ -1,19 +1,44 @@
 #!/usr/bin/python3
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from email import header
 from price_loader import PriceList
 from util import CellFormat
 import openpyxl
 import operator
 from tqdm import tqdm
-from timebudget import timebudget
-timebudget.set_quiet()  # don't show measurements as they happen
-# timebudget.report_at_exit()  # Generate report when the program exits
+from opentelemetry.trace import get_tracer, get_current_span
+from opentelemetry.trace.propagation import set_span_in_context
 
 commit_colors = {
     "OD": "FFD8CE",
     "1Y":"FFF5CE",
     "3Y": "DDE8CB"
 }
+def setup_trace():
+    try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.trace.propagation import set_span_in_context
+
+        trace.set_tracer_provider(TracerProvider(
+            resource=Resource.create({SERVICE_NAME: "price-estimator"})
+        ))
+
+        jaeger_exporter = JaegerExporter(
+            agent_host_name="localhost",
+            agent_port=6831,
+        )
+
+        trace.get_tracer_provider().add_span_processor(
+            BatchSpanProcessor(jaeger_exporter, max_export_batch_size=100, max_queue_size=50000)
+        )
+    except:
+        print("Failed to send trace data to jaeger")
 
 
 def get_parser(h):
@@ -23,53 +48,54 @@ def get_parser(h):
     return parser
 
 def process_row(sheet, row_index, row, regions, columns):
-    [vm, cpus, memory, disk, os_conf, os_tools] = operator.itemgetter(
-        columns['VM'], 
-        columns['CPUs'], 
-        columns['Memory'], 
-        columns['Unshared MB'], 
-        columns['OS according to the configuration file'], 
-        columns['OS according to the VMware Tools']
-    )(row)
-    disk = max(10, round(disk/1024, 2))
 
-    os = os_conf or os_tools
-    os_price = None
-    if isinstance(os, str):
-        os_price = price_list.get_os_price(os, cpus)
+        [vm, cpus, memory, disk, os_conf, os_tools] = operator.itemgetter(
+            columns['VM'], 
+            columns['CPUs'], 
+            columns['Memory'], 
+            columns['Unshared MB'], 
+            columns['OS according to the configuration file'], 
+            columns['OS according to the VMware Tools']
+        )(row)
+        disk = max(10, round(disk/1024, 2))
+
+        os = os_conf or os_tools
+        os_price = None
+        if isinstance(os, str):
+            os_price = price_list.get_os_price(os, cpus)
 
 
-    color = 'EEEEEE' if not (row_index % 2) else None
+        color = 'EEEEEE' if not (row_index % 2) else None
 
-    std = CellFormat(sheet).color(color)
-    curr = CellFormat(sheet).color(color).currency()
-    gb = CellFormat(sheet).color(color).gb()
+        std = CellFormat(sheet).color(color)
+        curr = CellFormat(sheet).color(color).currency()
+        gb = CellFormat(sheet).color(color).gb()
 
-    data=[
-        std.value(vm), 
-        std.value(cpus), 
-        gb.value(memory/1024), 
-        gb.value(disk), 
-        std.value(os)
-    ]
+        data=[
+            std.value(vm), 
+            std.value(cpus), 
+            gb.value(memory/1024), 
+            gb.value(disk), 
+            std.value(os)
+        ]
 
-    for region in regions:
-        od = price_list.select_price("od", cpus, memory, region)
-        cud = price_list.select_price("cud1y", cpus, memory, region)
-        data.extend([
-            std.value( od["name"]),
-            curr.value( od["od"]),
-            std.value( cud["name"]),
-            curr.value( cud["cud1y"]),
-            std.value( cud["name"]),
-            curr.value( cud["cud3y"]),
-            curr.value( os_price),
-            curr.value( price_list.select_disk_price("standard", region)*disk),
-            curr.value( price_list.select_disk_price("balanced", region)*disk),
-            curr.value( price_list.select_disk_price("ssd", region)*disk),
-        ])
-    sheet.append(data)
-    return data
+        for region in regions:
+            od = price_list.select_price("od", cpus, memory, region)
+            cud = price_list.select_price("cud1y", cpus, memory, region)
+            data.extend([
+                std.value( od["name"]),
+                curr.value( od["od"]),
+                std.value( cud["name"]),
+                curr.value( cud["cud1y"]),
+                std.value( cud["name"]),
+                curr.value( cud["cud3y"]),
+                curr.value( os_price),
+                curr.value( price_list.select_disk_price("standard", region)*disk),
+                curr.value( price_list.select_disk_price("balanced", region)*disk),
+                curr.value( price_list.select_disk_price("ssd", region)*disk),
+            ])
+        sheet.append(data)
+        return data
 
 initial_row_offset=3
 region_spacer=3
@@ -331,20 +357,14 @@ def add_summary_disclamers(sheet, disclamers):
     sheet.append([])
     initial_row_offset = len(disclamers) + 1
 
-def read_books(books, regions):
-    books_qtty= len(books)
-    regions_qtty= len(regions)
-    output = openpyxl.Workbook()
-    summary = output.active
-    summary.title="Summary"
-
-    # write one sheet per rvtools book to the target workbook
-    for book_name in books:
-        book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
-        columns = {}
-        sheet = output.create_sheet(book_name)
-        write_book_header(sheet, regions, regions_qtty)
-        with timebudget('input_row'):
+def process_file(book_name, output, regions, regions_qtty):
+    with get_tracer("price estimator").start_as_current_span("input_file", attributes={'file':book_name}):
+        with get_tracer("price estimator").start_as_current_span("read_file"):
+            book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
+        with get_tracer("price estimator").start_as_current_span("process_file"):
+            columns = {}
+            sheet = output.create_sheet(book_name)
+            write_book_header(sheet, regions, regions_qtty)
             input_sheet = book['vInfo']
             for row_index, row in enumerate(tqdm(input_sheet.iter_rows(values_only=True), desc=book_name, total=input_sheet.max_row)):
                 if (row_index == 0): #header
@@ -352,11 +372,10 @@ def read_books(books, regions):
                         columns[column] = index
                 else:
                     process_row(sheet, row_index, row, regions, columns)
-        fit_sheet_columns(sheet)
+            fit_sheet_columns(sheet)
 
+def create_summary(summary, regions, regions_qtty, books, books_qtty):
     add_summary_disclamers(summary, ['*** on-demand prices includes sustained use discounts ***'])
-
-
     # add a summarization table per region to the Summary sheet
     for region_index, region_name in enumerate(regions):
         add_region_header(summary, region_index, region_name)
@@ -369,16 +388,37 @@ def read_books(books, regions):
     for book_name in books:
         add_gcve_info(summary, book_name)
     add_gcve_footer(summary, books_qtty)
-    fit_summary_columns(summary)
-    print("saving output file...")
-    output.save(filename = 'estimated-rvtools.xlsx')
-    print("...done.")
-    output.close()
+    fit_summary_columns(summary)    
+
+def process_files(books, regions):
+    books_qtty= len(books)
+    regions_qtty= len(regions)
+    output = openpyxl.Workbook()
+    summary = output.active
+    summary.title="Summary"
+
+    # write one sheet per rvtools book to the target workbook
+    with get_tracer("price estimator").start_as_current_span("input_files"):
+        for book_name in books:
+            process_file(book_name, output, regions, regions_qtty)
+
+    with get_tracer("price estimator").start_as_current_span("create_summary"):
+        create_summary(summary, regions, regions_qtty, books, books_qtty)
+
+    with get_tracer("price estimator").start_as_current_span("save file"):
+        print("saving output file...")
+        output.save(
+            filename = 'estimated-rvtools-%s.xlsx' % datetime.now().strftime("%Y%m%d-%H%M%S")
+        )
+        print("...done.")
+        output.close()
 
 if (__name__=="__main__"):
-    with timebudget("total time"):
+    setup_trace()
+    with get_tracer("price estimator").start_as_current_span("total time"):
         p = get_parser(h=True)
         args = p.parse_args()
-        with timebudget("load prices"):
+        with get_tracer("price estimator").start_as_current_span("load_prices"):
             price_list = PriceList(args.regions, 'monthly')
-        read_books(args.sheets, args.regions)
+        with get_tracer("price estimator").start_as_current_span("process_files"):
+            process_files(args.sheets, args.regions)
