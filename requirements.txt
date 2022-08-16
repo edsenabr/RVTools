@@ -3,3 +3,6 @@ openpyxl
 requests
 timebudget
 tqdm
+opentelemetry-distro
+console-menu
+tabulate
