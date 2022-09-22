@@ -1,8 +1,12 @@
-#!/usr/bin/python3
+#!/bin/bash
+"exec" "$(dirname $0)/env/bin/python3" "$0" "$@"
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from email import header
+from genericpath import exists
+import sys
 from price_loader import PriceList
 from util import CellFormat
 import openpyxl
@@ -43,8 +47,9 @@ def setup_trace():
 
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
-    parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=False)
-    parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=False)
+    parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=True)
+    parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
+    parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     return parser
 
 def process_row(sheet, row_index, row, regions, columns):
@@ -359,7 +364,7 @@ def add_summary_disclamers(sheet, disclamers):
 
 def process_file(book_name, output, regions, regions_qtty):
     with get_tracer("price estimator").start_as_current_span("input_file", attributes={'file':book_name}):
-        with get_tracer("price estimator").start_as_current_span("read_file"):
+        with get_tracer("price estimator").start_as_current_span("read_file"):  
             book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
         with get_tracer("price estimator").start_as_current_span("process_file"):
             columns = {}
@@ -370,8 +375,13 @@ def process_file(book_name, output, regions, regions_qtty):
                 if (row_index == 0): #header
                     for index, column in enumerate(row):
                         columns[column] = index
+                elif row[columns['VM']] is None:
+                    return
                 else:
-                    process_row(sheet, row_index, row, regions, columns)
+                    try:
+                        process_row(sheet, row_index, row, regions, columns)
+                    except Exception as e:
+                        print("error processing row %s: %s" % (row_index, e))
             fit_sheet_columns(sheet)
 
 def create_summary(summary, regions, regions_qtty, books, books_qtty):
@@ -413,12 +423,42 @@ def process_files(books, regions):
         print("...done.")
         output.close()
 
+def validate_books(books):
+    errors = []
+    for book_name in books:
+        book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
+        if not 'vInfo' in book.sheetnames:
+            errors.append("Sheet vInfo not found on %s" % book_name)
+            continue
+        # cols = list(book['vInfo'].iter_cols(min_row=1, max_row=1, values_only=True))
+        required_cols = {
+            'VM',
+            'CPUs',
+            'Memory',
+            'Unshared MB',
+            'OS according to the configuration file',
+            'OS according to the VMware Tools'            
+        }
+        cols = [set(r) for r in book['vInfo'].iter_rows(min_row=1, max_row=1, values_only=True)][0]
+        missing = required_cols - cols
+        if len(missing) > 0:
+            print("##################")
+            print (missing)
+            print("##################")
+            sys.exit()
+
+    if len(errors) > 0:
+        print(*errors)
+        sys.exit(127)
+
+
 if (__name__=="__main__"):
     setup_trace()
     with get_tracer("price estimator").start_as_current_span("total time"):
         p = get_parser(h=True)
         args = p.parse_args()
+        validate_books(args.sheets)
         with get_tracer("price estimator").start_as_current_span("load_prices"):
-            price_list = PriceList(args.regions, 'monthly')
+            price_list = PriceList(args.regions, 'monthly', args.nocache)
         with get_tracer("price estimator").start_as_current_span("process_files"):
             process_files(args.sheets, args.regions)

@@ -28,9 +28,10 @@ NUM_FETCH_THREADS = 100
 
 
 class PriceList:
-    def __init__(self, regions, period):
+    def __init__(self, regions, period, *ignore_cache):
         self.regions = regions
         self.period = period
+        self.ignore_cache = ignore_cache
 
         self.lists = { 
             'disk': [],
@@ -75,6 +76,10 @@ class PriceList:
             self.add_frame(Frame('ve1-standard-72',soup.find('iframe').get('src')))
 
     def load_from_cache(self):
+        if self.ignore_cache:
+            print("forcing price list reload")
+            return False
+
         try:
             with open('price_loader.json') as cache:
                 data = json.load(cache)
@@ -113,7 +118,7 @@ class PriceList:
     def list_prices(self, span):
         ctx = set_span_in_context(span)
         with get_tracer("price_loader").start_as_current_span("load prices", context=ctx):
-            self.list_frames('https://cloud.google.com/compute/vm-instance-pricing', get_current_span())
+            self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
 
     def add_frame(self, frame: Frame) -> None:
         if Frame is None:
@@ -148,6 +153,7 @@ class PriceList:
         ctx = set_span_in_context(span)
         with get_tracer("price_loader").start_as_current_span("parse_premium_images", context=ctx):
             soup = self.list_frames('https://cloud.google.com/compute/disks-image-pricing', get_current_span())
+            #soup = self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
             cleanup = re.compile('[^0-9\.]+')
             #rhel =< 4vcpus <strong>$0.06 USD/hour</strong>
             try:
@@ -268,14 +274,15 @@ def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
     parser.add_argument("-t", "--threads", help="regions to be loaded", required=False)
     parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
+    parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     return parser
 
 if (__name__=="__main__"):
     p = get_parser(h=True)
     args = p.parse_args()
     if not args.threads is None:
-        NUM_FETCH_THREADS=args.threads
+        NUM_FETCH_THREADS=int(args.threads)
         print("running with %s threads" % NUM_FETCH_THREADS)
 
-    price_list = PriceList(args.regions, 'monthly')
+    price_list = PriceList(args.regions, 'monthly', args.nocache)
     pass

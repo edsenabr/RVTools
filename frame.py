@@ -6,17 +6,17 @@ from bs4 import BeautifulSoup
 import re
 
 base_price = [
-	"e2_predefined",
+	"e2_machine-types",
 	"e2_custommachinetypepricing",
-	"n2_predefined",
+	"n2_machine_types",
 	"n2_custommachinetypepricing",
 	"n2d_machine_types",
 	"n2d_custommachinetypepricing",
 	"t2d_machine_types",
-	"n1_predefined",
+	"n1_machine_types",
 	"n1_custommachinetypepricing",
-	"c2_machine_types",
-	"a2-base-price",
+	"c2_vcpus_and_memory",
+	"a2_machine_types",
     "c2d_vcpus_and_memory",
 ]
 

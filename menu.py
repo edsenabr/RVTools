@@ -114,6 +114,7 @@ def print_list(list):
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
     parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
+    parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     return parser
 
 
@@ -163,7 +164,7 @@ if (__name__=="__main__"):
     setup_trace()
     p = get_parser(h=True)
     args = p.parse_args()
-    price_list = PriceList(args.regions, 'monthly')
+    price_list = PriceList(args.regions, 'monthly', args.nocache)
     menu = build_menu()
     utils = PromptUtils(menu.screen)
 
