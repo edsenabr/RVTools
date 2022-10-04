@@ -5,3 +5,6 @@ env/*
 _oldstuff/*
 test.py
 price_loader.json
+price_loader-old.json
+.vscode/launch.json
+.vscode/launch.json

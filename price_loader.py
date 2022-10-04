@@ -77,7 +77,6 @@ class PriceList:
 
     def load_from_cache(self):
         if self.ignore_cache:
-            print("forcing price list reload")
             return False
 
         try:
@@ -97,7 +96,7 @@ class PriceList:
             with ThreadPoolExecutor(max_workers=10) as executor:
                 # executor.submit(self.list_frames, 'https://cloud.google.com/compute/vm-instance-pricing', get_current_span())
                 executor.submit(self.list_prices, get_current_span())
-                executor.submit(self.parse_premium_images, get_current_span())
+                # executor.submit(self.parse_premium_images, get_current_span())
                 executor.submit(self.load_gcve_data, get_current_span())
             self.frameExecutor.shutdown()
         self.last_update = time()
@@ -118,7 +117,8 @@ class PriceList:
     def list_prices(self, span):
         ctx = set_span_in_context(span)
         with get_tracer("price_loader").start_as_current_span("load prices", context=ctx):
-            self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
+            soup = self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
+            self.parse_premium_images(span, soup)
 
     def add_frame(self, frame: Frame) -> None:
         if Frame is None:
@@ -149,10 +149,11 @@ class PriceList:
                 for predefined in self.lists['predefined'] 
             ]
 
-    def parse_premium_images(self, span) -> dict:
+    def parse_premium_images(self, span, soup=None) -> dict:
         ctx = set_span_in_context(span)
         with get_tracer("price_loader").start_as_current_span("parse_premium_images", context=ctx):
-            soup = self.list_frames('https://cloud.google.com/compute/disks-image-pricing', get_current_span())
+            if soup is None:
+                soup = self.list_frames('https://cloud.google.com/compute/disks-image-pricing', get_current_span())
             #soup = self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
             cleanup = re.compile('[^0-9\.]+')
             #rhel =< 4vcpus <strong>$0.06 USD/hour</strong>
