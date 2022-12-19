@@ -1,4 +1,6 @@
-#!/usr/bin/python3
+#!/bin/bash
+"exec" "$(dirname $0)/env/bin/python3" "$0" "$@"
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -176,7 +178,7 @@ class PriceList:
                 pass
 
             try:
-                self.lists["images"]['windows_per_core'] =float(re.search('\$([0-9\.]+) USD per core/hour for all other machine types', soup.find('h3', {"id": "windows_server_pricing"}).find_next('ul').select_one('li:nth-of-type(1)').text).group(1)) * 730 
+                self.lists["images"]['windows_per_core'] =float(re.search('\$([0-9\.]+) USD/hour per visible vCPU', soup.find('h3', {"id": "windows_server_pricing"}).find_next('ul').select_one('li:nth-of-type(2)').text).group(1)) * 730 
             except  Exception as e:
                 print("Failed to load windows_per_core: %s" % e)
                 pass

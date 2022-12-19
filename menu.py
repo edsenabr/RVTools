@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+#!/bin/bash
+"exec" "$(dirname $0)/env/bin/python3" "$0" "$@"
+
+
 from datetime import datetime
 from price_loader import PriceList
 import argparse
