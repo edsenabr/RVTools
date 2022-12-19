@@ -118,10 +118,10 @@ class Frame:
 
     def frame_get(self):
         ctx = set_span_in_context(self.parent_span)
-        url = 'https://cloud.google.com%s' % self.src
-        with get_tracer("price_loader").start_as_current_span("frame_get", context=ctx, attributes={'url':url}):
+        # url = 'https://cloud.google.com%s' % self.src
+        with get_tracer("price_loader").start_as_current_span("frame_get", context=ctx, attributes={'url':self.src}):
             with get_tracer("price_loader").start_as_current_span("frame_load"):
-                text = requests.get(url).text
+                text = requests.get(self.src).text
                 soup = BeautifulSoup(text, 'html.parser')
                 self.raw_data = soup.find('table').find('tbody').find_all('tr')
             
