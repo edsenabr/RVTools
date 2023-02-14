@@ -162,7 +162,7 @@ def write_book_header(sheet, regions, regions_qtty):
     for region_index, region in enumerate(regions):
         region_first_column = 6 + (region_index*10)
         region_last_column = 5 + ((region_index+1)*10)
-        #region name
+        #name of the region
         sheet.merge_cells(start_row=sheet.max_row-3, start_column=region_first_column, end_row=sheet.max_row-3, end_column=region_last_column)
 
         #compute
