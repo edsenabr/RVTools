@@ -30,7 +30,7 @@ NUM_FETCH_THREADS = 100
 
 
 class PriceList:
-    def __init__(self, regions, period, *ignore_cache):
+    def __init__(self, regions, period, ignore_cache):
         self.regions = regions
         self.period = period
         self.ignore_cache = ignore_cache
