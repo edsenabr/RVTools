@@ -159,7 +159,7 @@ class PriceList:
             if custom_family[commit] < predefined[commit]:
                 if verbose:
                     print('cheaper:\tcustom\n')
-                    return custom_family
+                return custom_family
             elif verbose:
                     print('cheaper:\tpredefined\n')
         elif verbose:
