@@ -43,9 +43,6 @@ predefined_types_base_ids = [
 
 ]
 """
-is_custom = re.compile('^(.+) (.+)$')
-
-
 
 class TableFactory:
     def from_data(data, period, json_data) -> GenericTable:
@@ -85,11 +82,14 @@ class TableFactory:
         if id == "persistentdisk":
             return DiskTable(rows, json_data, period)
 
-        id_parts = re.match("^([a-z0-9]{2,3})(?:_|-)((?:custommachinetypepricing)?|.+)$", id)
-        if not id_parts:
-            return None
+        if id in ["larger_ultramem", "megamem"]:
+            family_name = "m1"
+        else:
+            id_parts = re.match("^([a-z0-9]{2,3})(?:_|-)((?:custommachinetypepricing)?|.+)$", id)
+            if not id_parts:
+                return None
 
-        family_name = id_parts.group(1)
+            family_name = id_parts.group(1)
         if family_name in ignored_families:
             return None
 
@@ -102,9 +102,6 @@ class TableFactory:
             case "Item":
                 table = BaseTable(rows, family_name, period, id_parts.group(2))
                 return table
-
-            case "Type":
-                return None
 
             case _:
                 return None
