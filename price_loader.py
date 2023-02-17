@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-from frame import Frame
+from pricing import TableFactory, GCVEFrame, Licences
 
 from opentelemetry.trace import get_tracer, get_current_span
 from opentelemetry.trace.propagation import set_span_in_context
@@ -26,56 +26,30 @@ sles = re.compile('.*SUSE.*', re.IGNORECASE)
 rhel = re.compile('.*Red Hat.*', re.IGNORECASE)
 free = re.compile('.*((debian)|(centos)|(coreos)|(ubuntu)).*', re.IGNORECASE)
 
-NUM_FETCH_THREADS = 100
-
-
 class PriceList:
-    def __init__(self, regions, period, ignore_cache):
+    def __init__(self, regions, period, ignore_cache, local_file):
         self.regions = regions
         self.period = period
         self.ignore_cache = ignore_cache
+        self.local_file = local_file
 
         self.lists = { 
             'disk': [],
             'predefined': [],
             'standard': [],
             'custom': [],
-            'predefined_bycud': [],
             "images" : {}
         }
 
-        with get_tracer("price_loader").start_as_current_span("load_price_data"):
-            with tqdm(total=0, desc="Loading price data") as self.progress_bar:
-                with ThreadPoolExecutor(max_workers=NUM_FETCH_THREADS) as self.frameExecutor:
-                    self.load_from_cache() or self.load_initial_data()
+        if not self.load_from_cache():
+            self.load_data()
+            self.parse_data()
+            self.last_update = time() #TODO: mover para save_cache()
+            self.fill_empty_prices()
+            self.load_gcve_data()
+            self.parse_premium_images()
+            self.save_cache()
 
-
-    def count(self):
-        return "loaded {predefined} standard types, {custom} custom types, {disk} disk prices and {os} O.S. prices.".format(
-            predefined=len(self.lists['predefined']),
-            custom=len(self.lists['custom']),
-            disk=len(self.lists['disk']),
-            os=len(self.lists["images"])
-        )
-
-    def list_frames(self, url, span=None):
-        ctx = set_span_in_context(span)
-        with get_tracer("price_loader").start_as_current_span("list_frames", context=ctx, attributes={'url':url}):
-            with get_tracer("price_loader").start_as_current_span("main_page"):
-                html_text = requests.get(url).text
-            with get_tracer("price_loader").start_as_current_span("parse"):
-                soup = BeautifulSoup(html_text, 'html.parser')
-                frames = soup.find_all('iframe')
-            with get_tracer("price_loader").start_as_current_span("load_frames"):
-                [self.add_frame(Frame.from_soup(frame)) for frame in [frame for frame in frames]]
-            return soup
-
-    def load_gcve_data(self, span):
-        ctx = set_span_in_context(span)
-        with get_tracer("price_loader").start_as_current_span("load_gcve_data", context=ctx):
-            html_text = requests.get('https://cloud.google.com/vmware-engine/pricing').text
-            soup = BeautifulSoup(html_text, 'html.parser')
-            self.add_frame(Frame('ve1-standard-72',soup.find('iframe').get('src')))
 
     def load_from_cache(self):
         if self.ignore_cache:
@@ -93,54 +67,40 @@ class PriceList:
         except FileNotFoundError:
             return False
 
-    def load_initial_data(self):
-        with get_tracer("price_loader").start_as_current_span("load_initial_data"):
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                # executor.submit(self.list_frames, 'https://cloud.google.com/compute/vm-instance-pricing', get_current_span())
-                executor.submit(self.list_prices, get_current_span())
-                # executor.submit(self.parse_premium_images, get_current_span())
-                executor.submit(self.load_gcve_data, get_current_span())
-            self.frameExecutor.shutdown()
-        self.last_update = time()
-        self.fill_empty_prices()
-        self.save_cache()
-            
-    def save_cache(self):
-        with open('price_loader.json', 'w') as cache:
-            json.dump(
-                {
-                    "last_update" : self.last_update,
-                    "regions" : self.regions,
-                    "lists": self.lists
-                }, 
-                cache
-            )
+    def load_data(self):
+        if self.local_file:
+            with open('html/all-pricing.html') as local_file:
+                html_text = local_file.read()
+            with open('html/gcp-compute.json') as local_file:
+                json_text = local_file.read()
+        else:
+            html_text = requests.get('https://cloud.google.com/compute/all-pricing').text
+            json_text = requests.get("https://www.gstatic.com/cloud-site-ux/pricing/data/gcp-compute.json").text
 
-    def list_prices(self, span):
-        ctx = set_span_in_context(span)
-        with get_tracer("price_loader").start_as_current_span("load prices", context=ctx):
-            soup = self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
-            self.parse_premium_images(span, soup)
+        self.soup = BeautifulSoup(html_text, 'html.parser')
+        self.raw_data = self.soup.find_all('cloudx-pricing-table')
+        self.json_data = json.loads(json_text)
 
-    def add_frame(self, frame: Frame) -> None:
-        if Frame is None:
-            return
-        frame.price_list = self
-        frame.regions = self.regions
-        frame.period = self.period
-        frame.parent_span = get_current_span()
-        self.frameExecutor.submit(frame.frame_get)
-        self.progress_bar.total += 1
-        self.progress_bar.refresh()
 
-    def fill_empty_price(self, item) -> None:
-        family_price = [standard for standard in self.lists['standard'] if (
-            standard["region"] == item["region"] and 
-            standard["name"] == item["family"]
-        )][0]
-        item["cud1y"] = (item["cpus"]*family_price["vcpus_cud1y"])+(item["memory"]*family_price["memory_cud1y"])
-        item["cud3y"] = (item["cpus"]*family_price["vcpus_cud3y"])+(item["memory"]*family_price["memory_cud3y"])
-        return item
+    def count(self):
+        return "loaded {predefined} standard types, {custom} custom types, {disk} disk prices and {os} O.S. prices.".format(
+            predefined=len(self.lists['predefined']),
+            custom=len(self.lists['custom']),
+            disk=len(self.lists['disk']),
+            os=len(self.lists["images"])
+        )
+
+    def parse_data(self):
+        for data in self.raw_data:
+            table = TableFactory.from_data(data, self.period, self.json_data)
+            if table is None:
+                continue    
+
+            pricing = table.parse(self.regions)
+            if pricing is None:
+                continue
+
+            self.lists[table.name].extend(pricing)
 
     def fill_empty_prices(self) -> None:
         with get_tracer("price_loader").start_as_current_span("fill_empty_prices"):
@@ -151,37 +111,37 @@ class PriceList:
                 for predefined in self.lists['predefined'] 
             ]
 
-    def parse_premium_images(self, span, soup=None) -> dict:
-        ctx = set_span_in_context(span)
-        with get_tracer("price_loader").start_as_current_span("parse_premium_images", context=ctx):
-            if soup is None:
-                soup = self.list_frames('https://cloud.google.com/compute/disks-image-pricing', get_current_span())
-            #soup = self.list_frames('https://cloud.google.com/compute/all-pricing', get_current_span())
-            cleanup = re.compile('[^0-9\.]+')
-            #rhel =< 4vcpus <strong>$0.06 USD/hour</strong>
-            try:
-                self.lists["images"]['rhel_less_equal_4vcpus'] = float(cleanup.sub("", soup.find('h3', {"id": "rhel_images"}).find_next_sibling('p').select_one('li:nth-of-type(1)').find('strong').text)) * 730 
-            except Exception as e:
-                print("Failed to load rhel_less_equal_4vcpus: %s" % e)
-                pass
+    def fill_empty_price(self, item) -> None:
+        family_price = [standard for standard in self.lists['standard'] if (
+            standard["region"] == item["region"] and 
+            standard["name"] == item["family"]
+        )][0]
+        item["cud1y"] = (item["cpus"]*family_price["vcpus_cud1y"])+(item["memory"]*family_price["memory_cud1y"])
+        item["cud3y"] = (item["cpus"]*family_price["vcpus_cud3y"])+(item["memory"]*family_price["memory_cud3y"])
+        return item
 
-            try:
-                self.lists["images"]['rhel_more_4vcpus'] = float(cleanup.sub("", soup.find('h3', {"id": "rhel_images"}).find_next_sibling('p').select_one('li:nth-of-type(2)').find('strong').text)) * 730 
-            except Exception as e:
-                print("Failed to load rhel_more_4vcpus: %s" % e)
-                pass
 
-            try:
-                self.lists["images"]['sles'] = float(cleanup.sub("", soup.find('h3', {"id": "suse_images"}).find_next_sibling('p').select_one('li:nth-of-type(2)').find('strong').text)) * 730 
-            except Exception as e:
-                print("Failed to load sles: %s" % e)
-                pass
+    def load_gcve_data(self):
+        frame = GCVEFrame()
+        pricing = frame.parse(self.regions)
+        if not pricing is None:
+            self.lists[frame.name].extend(pricing)
 
-            try:
-                self.lists["images"]['windows_per_core'] =float(re.search('\$([0-9\.]+) USD/hour per visible vCPU', soup.find('h3', {"id": "windows_server_pricing"}).find_next('ul').select_one('li:nth-of-type(2)').text).group(1)) * 730 
-            except  Exception as e:
-                print("Failed to load windows_per_core: %s" % e)
-                pass
+    def parse_premium_images(self) -> dict:
+        licenses = Licences(self.soup, self.period)
+        if not licenses is None:
+            self.lists[licenses.name].update(licenses.parse())
+
+    def save_cache(self):
+        with open('price_loader.json', 'w') as cache:
+            json.dump(
+                {
+                    "last_update" : self.last_update,
+                    "regions" : self.regions,
+                    "lists": self.lists
+                }, 
+                cache
+            )
 
 
     def select_price(self, commit, cpus, memory, region, verbose=False):
@@ -260,7 +220,6 @@ class PriceList:
         )]
         return None if len(price) == 0 else price[0]
 
-
     def get_os_price(self, os, cpus): 
         if windows.match(os):
             return self.lists["images"]['windows_per_core'] * cpus
@@ -271,21 +230,16 @@ class PriceList:
         elif free.match(os):
             return 0
 
-
-
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
-    parser.add_argument("-t", "--threads", help="regions to be loaded", required=False)
     parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
+    parser.add_argument("-l", "--local", action='store_true', help="use local html")
     return parser
 
 if (__name__=="__main__"):
     p = get_parser(h=True)
     args = p.parse_args()
-    if not args.threads is None:
-        NUM_FETCH_THREADS=int(args.threads)
-        print("running with %s threads" % NUM_FETCH_THREADS)
-
-    price_list = PriceList(args.regions, 'monthly', args.nocache)
+    price_list = PriceList(args.regions, 'monthly', args.nocache, args.local)
+    print(price_list.count())    
     pass
