@@ -13,8 +13,12 @@ class DiskTable (GenericTable) :
         for index, row in enumerate(self.rows[1:]):
             prices = row["cells"]
             price_name = prices[0]
+            
+            if price_name == "Extreme provisioned IOPS":
+                continue
+
             definition = base_re.search(price_name)
-            if (not definition):
+            if not definition:
                 print(f"Incomplete {self.name} data for {price_name}")
                 continue
 
@@ -45,5 +49,4 @@ class DiskTable (GenericTable) :
                 price = price[int(item)]
             else:
                 price = price[item]
-        print(f"{name} price for {taxonomy}: {price}")
         return int(price) / 1000000000
