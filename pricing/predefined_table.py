@@ -12,6 +12,10 @@ field_indexes = {
     "cud3y" : 4
 }
 
+predefined_names = re.compile('^\w{2,3}-.+?(-\d{1,3})?$', re.IGNORECASE)
+def is_predefined(name:str): 
+    return predefined_names.match(name)
+
 
 class PredefinedTable (GenericTable) :
     def __init__(self, rows, family_name, period) -> None:
@@ -25,7 +29,7 @@ class PredefinedTable (GenericTable) :
             
             name = prices[0]
 
-            if name in shared_types:
+            if not is_predefined(name) or name in shared_types:
                 continue
 
             cpu = float(prices[self.indexes["cpu"]])
@@ -33,16 +37,23 @@ class PredefinedTable (GenericTable) :
 
             for region in regions:
                 region_alias = region.replace("-", "")
+                od = None
+                spot = None
+                cud1y = None
+                cud3y = None
                 try:
-                    od =  prices[self.indexes["od"]]["priceByRegion"][region_alias]
-                    spot =  prices[self.indexes["spot"]]["priceByRegion"][region_alias]
-                    cud1y = None
-                    cud3y = None
+                    od =  float(prices[self.indexes["od"]]["priceByRegion"][region_alias])
+                    if not self.indexes["spot"] is None:
+                        if not prices[self.indexes["spot"]] == "Unavailable":
+                            spot =  float(prices[self.indexes["spot"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud1y"] is None:
-                        cud1y =  prices[self.indexes["cud1y"]]["priceByRegion"][region_alias]
+                        cud1y =  float(prices[self.indexes["cud1y"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud3y"] is None:
-                        cud3y =  prices[self.indexes["cud3y"]]["priceByRegion"][region_alias]
+                        cud3y =  float(prices[self.indexes["cud3y"]]["priceByRegion"][region_alias])
+                except KeyError as e:
+                    pass
 
+                if (not od is None):
                     parsed_data.append({
                         "family": self.family_name,
                         "name": name,
@@ -56,8 +67,4 @@ class PredefinedTable (GenericTable) :
                         "cud1y": cud1y,
                         "cud3y": cud3y
                     })
-
-                except KeyError:
-                    pass
-
-            return parsed_data
+        return parsed_data
