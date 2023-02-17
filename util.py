@@ -1,19 +1,6 @@
 from __future__ import annotations
 import openpyxl
 
-class Incrementor:
-	def __init__(self, value):
-		self.value = value
-	def pre(self, mu=1):
-		self.value += mu
-		return self.value
-	def post(self, mu=1):
-		current = self.value
-		self.value += mu
-		return current
-	def __str__(self):
-		return str(self.value)
-
 class CellFormat:
     thin = openpyxl.styles.Side(border_style="thin", color="000000")
     thin_border = openpyxl.styles.Border(top=thin, left=thin, right=thin, bottom=thin)
