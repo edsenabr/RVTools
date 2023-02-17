@@ -57,7 +57,7 @@ class GCVEFrame:
             for region in regions:
                 od = parse_number(row, 2, region, 'hourly')
                 if (od is None):
-                    print (f"Failed to load on-demand price for {region}")
+                    print (f"Failed to load GCVE on-demand price for {region}")
                     continue
 
                 parsed_data.append({
