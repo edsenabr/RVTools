@@ -14,6 +14,7 @@ import operator
 from tqdm import tqdm
 from opentelemetry.trace import get_tracer, get_current_span
 from opentelemetry.trace.propagation import set_span_in_context
+import os
 
 commit_colors = {
     "OD": "FFD8CE",
@@ -50,6 +51,7 @@ def get_parser(h):
     parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=True)
     parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
+    parser.add_argument("-l", "--local", action='store_true', help="use local html")
     return parser
 
 def process_row(sheet, row_index, row, regions, columns):
@@ -368,7 +370,7 @@ def process_file(book_name, output, regions, regions_qtty):
             book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
         with get_tracer("price estimator").start_as_current_span("process_file"):
             columns = {}
-            sheet = output.create_sheet(book_name)
+            sheet = output.create_sheet(os.path.basename(book_name))
             write_book_header(sheet, regions, regions_qtty)
             input_sheet = book['vInfo']
             for row_index, row in enumerate(tqdm(input_sheet.iter_rows(values_only=True), desc=book_name, total=input_sheet.max_row)):
@@ -390,13 +392,13 @@ def create_summary(summary, regions, regions_qtty, books, books_qtty):
     for region_index, region_name in enumerate(regions):
         add_region_header(summary, region_index, region_name)
         for book_index, book_name in enumerate(books):
-            add_book_info(summary, book_index, book_name, region_index, region_name, regions_qtty, books_qtty)
+            add_book_info(summary, book_index, os.path.basename(book_name), region_index, region_name, regions_qtty, books_qtty)
         add_region_footer(summary, books_qtty, region_index)
 
     # add the gcve table to the Summary sheet
     add_gcve_header(summary)
     for book_name in books:
-        add_gcve_info(summary, book_name)
+        add_gcve_info(summary, os.path.basename(book_name))
     add_gcve_footer(summary, books_qtty)
     fit_summary_columns(summary)    
 
@@ -459,6 +461,6 @@ if (__name__=="__main__"):
         args = p.parse_args()
         validate_books(args.sheets)
         with get_tracer("price estimator").start_as_current_span("load_prices"):
-            price_list = PriceList(args.regions, 'monthly', args.nocache)
+            price_list = PriceList(args.regions, 'monthly', args.nocache, args.local)
         with get_tracer("price estimator").start_as_current_span("process_files"):
             process_files(args.sheets, args.regions)
