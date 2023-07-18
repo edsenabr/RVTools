@@ -47,9 +47,11 @@ class PredefinedTable (GenericTable) :
                         if not prices[self.indexes["spot"]] == "Unavailable":
                             spot =  float(prices[self.indexes["spot"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud1y"] is None:
-                        cud1y =  float(prices[self.indexes["cud1y"]]["priceByRegion"][region_alias])
+                        if prices[self.indexes["cud1y"]] != "**":
+                            cud1y =  float(prices[self.indexes["cud1y"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud3y"] is None:
-                        cud3y =  float(prices[self.indexes["cud3y"]]["priceByRegion"][region_alias])
+                        if prices[self.indexes["cud3y"]] != "**":
+                            cud3y =  float(prices[self.indexes["cud3y"]]["priceByRegion"][region_alias])
                 except KeyError as e:
                     pass
 

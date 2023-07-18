@@ -7,19 +7,13 @@ import json
 import math
 import re
 from operator import itemgetter
-from time import time
+from time import time, ctime
 
 import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from pricing import TableFactory, GCVEFrame, Licences
-
-from opentelemetry.trace import get_tracer, get_current_span
-from opentelemetry.trace.propagation import set_span_in_context
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-
 
 windows = re.compile('.*windows.*', re.IGNORECASE)
 sles = re.compile('.*SUSE.*', re.IGNORECASE)
@@ -42,6 +36,7 @@ class PriceList:
         }
 
         if not self.load_from_cache():
+            print("Ignoring cache")
             self.load_data()
             self.parse_data()
             self.last_update = time() #TODO: mover para save_cache()
@@ -54,15 +49,16 @@ class PriceList:
     def load_from_cache(self):
         if self.ignore_cache:
             return False
-
         try:
             with open('price_loader.json') as cache:
                 data = json.load(cache)
                 if not all(region in data['regions'] for region in self.regions):
                     return False
                 self.lists = data["lists"]
-                self.last_update = data["last_update"]
+                self.last_update = ctime(data["last_update"])
                 self.regions = data['regions']
+                print(f"WARNING! using cache file 'price_loader.json' from {self.last_update}\n\t{self.count()}")
+                print(f"\tuse -nc to avoid caching or delete the file")
                 return True
         except FileNotFoundError:
             return False
@@ -103,21 +99,24 @@ class PriceList:
             self.lists[table.name].extend(pricing)
 
     def fill_empty_prices(self) -> None:
-        with get_tracer("price_loader").start_as_current_span("fill_empty_prices"):
-            self.lists['predefined'] = [
-                predefined 
-                    if not predefined['cud1y'] is None 
-                    else self.fill_empty_price(predefined) 
-                for predefined in self.lists['predefined'] 
-            ]
+        self.lists['predefined'] = [
+            predefined 
+                if not predefined['cud1y'] is None 
+                else self.fill_empty_price(predefined) 
+            for predefined in self.lists['predefined'] 
+        ]
 
     def fill_empty_price(self, item) -> None:
         family_price = [standard for standard in self.lists['standard'] if (
             standard["region"] == item["region"] and 
             standard["name"] == item["family"]
-        )][0]
-        item["cud1y"] = (item["cpus"]*family_price["vcpus_cud1y"])+(item["memory"]*family_price["memory_cud1y"])
-        item["cud3y"] = (item["cpus"]*family_price["vcpus_cud3y"])+(item["memory"]*family_price["memory_cud3y"])
+        )]
+        if len(family_price) == 0:
+            return item
+        family_price = family_price[0]
+        if "vcpus_cud1y" in family_price:
+            item["cud1y"] = (item["cpus"]*family_price["vcpus_cud1y"])+(item["memory"]*family_price["memory_cud1y"])
+            item["cud3y"] = (item["cpus"]*family_price["vcpus_cud3y"])+(item["memory"]*family_price["memory_cud3y"])
         return item
 
 
@@ -156,6 +155,12 @@ class PriceList:
             if verbose:
                 print('predefined:\t`{name}` costs ${price}'.format(name=predefined['name'], price=predefined[commit]))
                 print('custom:\t\t`{name}` costs ${price}'.format(name=custom_family['name'], price=custom_family[commit]))
+
+            if predefined[commit] is None:
+                if verbose:
+                    print(f'predefined:\tdoes not have {commit}\n')
+                return custom_family
+            
             if custom_family[commit] < predefined[commit]:
                 if verbose:
                     print('cheaper:\tcustom\n')
@@ -233,6 +238,7 @@ class PriceList:
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
     parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
+    parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     parser.add_argument("-l", "--local", action='store_true', help="use local html")
     return parser
@@ -240,6 +246,6 @@ def get_parser(h):
 if (__name__=="__main__"):
     p = get_parser(h=True)
     args = p.parse_args()
-    price_list = PriceList(args.regions, 'monthly', args.nocache, args.local)
+    price_list = PriceList(args.regions, args.period, args.nocache, args.local)
     print(price_list.count())    
     pass

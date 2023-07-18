@@ -54,7 +54,8 @@ class TableFactory:
             "c2d",
             "combining_commitments_with_reservations",
             "localssdpricing",
-            "imagestorage"
+            "imagestorage",
+            "n2_n2d_c2_m3"
         ]
 
         ignored_families = [

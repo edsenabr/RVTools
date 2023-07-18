@@ -3,5 +3,8 @@ openpyxl
 requests
 tqdm
 opentelemetry-distro
+opentelemetry-exporter-gcp-monitoring
+opentelemetry-exporter-gcp-trace
+opentelemetry-exporter-jaeger-thrift
 console-menu
 tabulate

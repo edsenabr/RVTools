@@ -2,9 +2,7 @@
 "exec" "$(dirname $0)/env/bin/python3" "$0" "$@"
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from email import header
 from genericpath import exists
 import sys
 from price_loader import PriceList
@@ -12,43 +10,20 @@ from util import CellFormat
 import openpyxl
 import operator
 from tqdm import tqdm
-from opentelemetry.trace import get_tracer, get_current_span
-from opentelemetry.trace.propagation import set_span_in_context
+
 import os
+import traceback
 
 commit_colors = {
     "OD": "FFD8CE",
     "1Y":"FFF5CE",
     "3Y": "DDE8CB"
 }
-def setup_trace():
-    try:
-        from opentelemetry import trace
-        from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.trace.propagation import set_span_in_context
-
-        trace.set_tracer_provider(TracerProvider(
-            resource=Resource.create({SERVICE_NAME: "price-estimator"})
-        ))
-
-        jaeger_exporter = JaegerExporter(
-            agent_host_name="localhost",
-            agent_port=6831,
-        )
-
-        trace.get_tracer_provider().add_span_processor(
-            BatchSpanProcessor(jaeger_exporter, max_export_batch_size=100, max_queue_size=50000)
-        )
-    except:
-        print("Failed to send trace data to jaeger")
-
 
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
     parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=True)
+    parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
     parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     parser.add_argument("-l", "--local", action='store_true', help="use local html")
@@ -365,26 +340,23 @@ def add_summary_disclamers(sheet, disclamers):
     initial_row_offset = len(disclamers) + 1
 
 def process_file(book_name, output, regions, regions_qtty):
-    with get_tracer("price estimator").start_as_current_span("input_file", attributes={'file':book_name}):
-        with get_tracer("price estimator").start_as_current_span("read_file"):  
-            book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
-        with get_tracer("price estimator").start_as_current_span("process_file"):
-            columns = {}
-            sheet = output.create_sheet(os.path.basename(book_name))
-            write_book_header(sheet, regions, regions_qtty)
-            input_sheet = book['vInfo']
-            for row_index, row in enumerate(tqdm(input_sheet.iter_rows(values_only=True), desc=book_name, total=input_sheet.max_row)):
-                if (row_index == 0): #header
-                    for index, column in enumerate(row):
-                        columns[column] = index
-                elif row[columns['VM']] is None:
-                    return
-                else:
-                    try:
-                        process_row(sheet, row_index, row, regions, columns)
-                    except Exception as e:
-                        print("error processing row %s: %s" % (row_index, e))
-            fit_sheet_columns(sheet)
+        book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
+        columns = {}
+        sheet = output.create_sheet(os.path.basename(book_name))
+        write_book_header(sheet, regions, regions_qtty)
+        input_sheet = book['vInfo']
+        for row_index, row in enumerate(tqdm(input_sheet.iter_rows(values_only=True), desc=book_name, total=input_sheet.max_row)):
+            if (row_index == 0): #header
+                for index, column in enumerate(row):
+                    columns[column] = index
+            elif row[columns['VM']] is None:
+                return
+            else:
+                try:
+                    process_row(sheet, row_index, row, regions, columns)
+                except Exception as e:
+                    print("error processing row %s: %s" % (row_index, traceback.format_exc()))
+        fit_sheet_columns(sheet)
 
 def create_summary(summary, regions, regions_qtty, books, books_qtty):
     add_summary_disclamers(summary, ['*** on-demand prices includes sustained use discounts ***'])
@@ -410,20 +382,17 @@ def process_files(books, regions):
     summary.title="Summary"
 
     # write one sheet per rvtools book to the target workbook
-    with get_tracer("price estimator").start_as_current_span("input_files"):
-        for book_name in books:
-            process_file(book_name, output, regions, regions_qtty)
+    for book_name in books:
+        process_file(book_name, output, regions, regions_qtty)
 
-    with get_tracer("price estimator").start_as_current_span("create_summary"):
-        create_summary(summary, regions, regions_qtty, books, books_qtty)
+    create_summary(summary, regions, regions_qtty, books, books_qtty)
 
-    with get_tracer("price estimator").start_as_current_span("save file"):
-        print("saving output file...")
-        output.save(
-            filename = 'estimated-rvtools-%s.xlsx' % datetime.now().strftime("%Y%m%d-%H%M%S")
-        )
-        print("...done.")
-        output.close()
+    print("saving output file...")
+    output.save(
+        filename = 'estimated-rvtools-%s.xlsx' % datetime.now().strftime("%Y%m%d-%H%M%S")
+    )
+    print("...done.")
+    output.close()
 
 def validate_books(books):
     errors = []
@@ -455,12 +424,8 @@ def validate_books(books):
 
 
 if (__name__=="__main__"):
-    setup_trace()
-    with get_tracer("price estimator").start_as_current_span("total time"):
-        p = get_parser(h=True)
-        args = p.parse_args()
-        validate_books(args.sheets)
-        with get_tracer("price estimator").start_as_current_span("load_prices"):
-            price_list = PriceList(args.regions, 'monthly', args.nocache, args.local)
-        with get_tracer("price estimator").start_as_current_span("process_files"):
-            process_files(args.sheets, args.regions)
+    p = get_parser(h=True)
+    args = p.parse_args()
+    validate_books(args.sheets)
+    price_list = PriceList(args.regions, args.period, args.nocache, args.local)
+    process_files(args.sheets, args.regions)

@@ -10,11 +10,6 @@ from consolemenu.items import *
 from consolemenu.prompt_utils import PromptUtils, BaseValidator, InputResult
 from tabulate import tabulate
 
-def setup_trace():
-    setup_trace_gcp()
-
-
-
 def setup_monitoring_gcp():
     from opentelemetry import metrics
     from opentelemetry.exporter.cloud_monitoring import (
@@ -36,51 +31,6 @@ def setup_monitoring_gcp():
         unit="1",
         value_type=int,
     )
-
-def setup_trace_gcp():
-    try:
-        from opentelemetry import trace
-        from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
-        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.trace.propagation import set_span_in_context
-
-        trace.set_tracer_provider(TracerProvider(
-            resource=Resource.create({SERVICE_NAME: "price-loader"})
-        ))
-
-        trace.get_tracer_provider().add_span_processor(
-            BatchSpanProcessor(CloudTraceSpanExporter())
-        )
-
-    except:
-        print("Failed to send trace data to gcp")
-
-def setup_trace_jaeger():
-    try:
-        from opentelemetry import trace
-        from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.trace.propagation import set_span_in_context
-
-        trace.set_tracer_provider(TracerProvider(
-            resource=Resource.create({SERVICE_NAME: "price-loader"})
-        ))
-
-        jaeger_exporter = JaegerExporter(
-            agent_host_name="localhost",
-            agent_port=6831,
-        )
-
-        trace.get_tracer_provider().add_span_processor(
-            BatchSpanProcessor(jaeger_exporter, max_export_batch_size=100)
-        )
-    except:
-        print("Failed to send trace data to jaeger")
-
 
 def read_float_value(label):
     try:
@@ -117,7 +67,9 @@ def print_list(list):
 def get_parser(h):
     parser = argparse.ArgumentParser(add_help=h)
     parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
+    parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
+    parser.add_argument("-l", "--local", action='store_true', help="use local html")
     return parser
 
 
@@ -164,10 +116,9 @@ def build_menu():
 
 
 if (__name__=="__main__"):
-    setup_trace()
     p = get_parser(h=True)
     args = p.parse_args()
-    price_list = PriceList(args.regions, 'monthly', args.nocache)
+    price_list = PriceList(args.regions, args.period, args.nocache, args.local)
     menu = build_menu()
     utils = PromptUtils(menu.screen)
 

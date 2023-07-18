@@ -56,7 +56,7 @@ class BaseTable (GenericTable) :
             if "vcpus_od" in region_data and "memory_od" in region_data:
                 parsed_data.append(region_data)
             else:
-                print(f"Incomplete {self.name} data for {self.family_name} in {region}")
+                print(f"WARNING! Incomplete {self.name} data for {self.family_name} in {region}")
         return parsed_data
 
     def get_price_for_region(self, prices, region_data, region_alias, component, commit) -> None:
