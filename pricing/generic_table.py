@@ -14,7 +14,7 @@ class GenericTable(ABC):
             "spot"  : self.get_index_for("spot"),
             "cud1y" : self.get_index_for("1.*y"),
             "cud3y" : self.get_index_for("3.*y"),
-            "cpu"   : self.get_index_for("cpu"),
+            "cpu"   : self.get_index_for("((cpu)|(cores))"),
             "mem"   : self.get_index_for("memory"),
         }
 
