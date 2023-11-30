@@ -61,7 +61,10 @@ class BaseTable (GenericTable) :
 
     def get_price_for_region(self, prices, region_data, region_alias, component, commit) -> None:
         try:
-            price = float(prices[self.indexes[commit]]["priceByRegion"][region_alias])
+            price_data = prices[self.indexes[commit]]
+            if (price_data == 'Unavailable'):
+                return
+            price = float(price_data["priceByRegion"][region_alias])
             if self.period == "monthly":
                 price *= 730
             region_data[f"{component}_{commit}"] = price
