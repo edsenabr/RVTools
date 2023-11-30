@@ -63,9 +63,9 @@ class TableFactory:
         ]
 
 
-        id =  [sibling['id'] for sibling in data.find_previous_siblings() if (
+        id =  next(iter([sibling['id'] for sibling in data.find_previous_siblings() if (
             sibling.name in ['h3', 'h4'] 
-        )][0]
+        )] or []), None)
 
         if id is None or id in ignored_frames:
             return None
