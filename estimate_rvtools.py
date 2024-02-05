@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 import os
 import traceback
+import math
 
 commit_colors = {
     "OD": "FFD8CE",
@@ -27,19 +28,21 @@ def get_parser(h):
     parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     parser.add_argument("-l", "--local", action='store_true', help="use local html")
+    parser.add_argument("-o", "--optimization", nargs='?', type=int, choices=range(1,50),  default=0, help="cpu optimization %", required=False)
     return parser
 
-def process_row(sheet, row_index, row, regions, columns):
+def process_row(sheet, row_index, row, regions, columns, optimization):
 
         [vm, cpus, memory, disk, os_conf, os_tools] = operator.itemgetter(
             columns['VM'], 
             columns['CPUs'], 
             columns['Memory'], 
-            columns['Unshared MB'], 
+            columns['Provisioned MiB'], 
             columns['OS according to the configuration file'], 
             columns['OS according to the VMware Tools']
         )(row)
         disk = max(10, round(disk/1024, 2))
+        cpus = math.ceil(optimization*cpus)
 
         os = os_conf or os_tools
         os_price = None
@@ -339,7 +342,7 @@ def add_summary_disclamers(sheet, disclamers):
     sheet.append([])
     initial_row_offset = len(disclamers) + 1
 
-def process_file(book_name, output, regions, regions_qtty):
+def process_file(book_name, output, regions, regions_qtty, optimization):
         book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
         columns = {}
         sheet = output.create_sheet(os.path.basename(book_name))
@@ -353,7 +356,7 @@ def process_file(book_name, output, regions, regions_qtty):
                 return
             else:
                 try:
-                    process_row(sheet, row_index, row, regions, columns)
+                    process_row(sheet, row_index, row, regions, columns, optimization)
                 except Exception as e:
                     print("error processing row %s: %s" % (row_index, traceback.format_exc()))
         fit_sheet_columns(sheet)
@@ -374,7 +377,7 @@ def create_summary(summary, regions, regions_qtty, books, books_qtty):
     add_gcve_footer(summary, books_qtty)
     fit_summary_columns(summary)    
 
-def process_files(books, regions):
+def process_files(books, regions, optimization):
     books_qtty= len(books)
     regions_qtty= len(regions)
     output = openpyxl.Workbook()
@@ -383,7 +386,7 @@ def process_files(books, regions):
 
     # write one sheet per rvtools book to the target workbook
     for book_name in books:
-        process_file(book_name, output, regions, regions_qtty)
+        process_file(book_name, output, regions, regions_qtty, optimization)
 
     create_summary(summary, regions, regions_qtty, books, books_qtty)
 
@@ -428,4 +431,4 @@ if (__name__=="__main__"):
     args = p.parse_args()
     validate_books(args.sheets)
     price_list = PriceList(args.regions, args.period, args.nocache, args.local)
-    process_files(args.sheets, args.regions)
+    process_files(args.sheets, args.regions, (1 - (args.optimization/100)))
