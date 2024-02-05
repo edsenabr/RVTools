@@ -21,6 +21,11 @@ class PredefinedTable (GenericTable) :
     def __init__(self, rows, family_name, period) -> None:
         super().__init__(rows, family_name, period)
         self.name="predefined"
+        if period == "monthly":
+            self.muliplier = 730
+        else:
+            self.muliplier = 1
+
 
     def parse(self, regions) -> list:
         parsed_data = []
@@ -42,16 +47,16 @@ class PredefinedTable (GenericTable) :
                 cud1y = None
                 cud3y = None
                 try:
-                    od =  float(prices[self.indexes["od"]]["priceByRegion"][region_alias])
+                    od =  self.muliplier * float(prices[self.indexes["od"]]["priceByRegion"][region_alias])
                     if not self.indexes["spot"] is None:
                         if not prices[self.indexes["spot"]] == "Unavailable":
-                            spot =  float(prices[self.indexes["spot"]]["priceByRegion"][region_alias])
+                            spot =  self.muliplier * float(prices[self.indexes["spot"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud1y"] is None:
                         if prices[self.indexes["cud1y"]] != "**":
-                            cud1y =  float(prices[self.indexes["cud1y"]]["priceByRegion"][region_alias])
+                            cud1y =  self.muliplier * float(prices[self.indexes["cud1y"]]["priceByRegion"][region_alias])
                     if not self.indexes["cud3y"] is None:
                         if prices[self.indexes["cud3y"]] != "**":
-                            cud3y =  float(prices[self.indexes["cud3y"]]["priceByRegion"][region_alias])
+                            cud3y =  self.muliplier *  float(prices[self.indexes["cud3y"]]["priceByRegion"][region_alias])
                 except KeyError as e:
                     pass
 
