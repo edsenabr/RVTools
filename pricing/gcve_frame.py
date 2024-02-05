@@ -13,7 +13,7 @@ region_codes = {
     "northamerica-northeast1": "mtreal",
     "northamerica-northeast2": "tor",
     "southamerica-east1": "spaulo",
-    "southamerica-west1": "sant",
+    "southamerica-west1": "san",
     "europe-west1": "eu",
     "europe-north1": "fi",
     "europe-west3": "ffurt",
@@ -69,7 +69,7 @@ class GCVEFrame:
                     "od": od * 730,
                     "spot": None,
                     "cud1y": parse_number(row.select_one('td:nth-of-type(2)'), 1, region, 'hourly') * 730,
-                    "cud3y": parse_number(row.select_one('td:nth-of-type(2)'), 2, region, 'hourly') * 730
+                    "cud3y": parse_number(row.select_one('td:nth-of-type(2)'), 3, region, 'hourly') * 730
                 })
             return parsed_data
 
