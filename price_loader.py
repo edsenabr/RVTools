@@ -232,7 +232,7 @@ class PriceList:
             return self.lists["images"]['sles']
         elif rhel.match(os):
             return self.lists["images"]['rhel_less_equal_4vcpus'] if cpus <= 4 else self.lists["images"]['rhel_more_4vcpus']
-        elif free.match(os):
+        else:
             return 0
 
 def get_parser(h):
