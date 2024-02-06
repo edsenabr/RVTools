@@ -1,12 +1,13 @@
 import json
 import math
 import re
-from time import time, ctime
+from time import time
 import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 from pricing import TableFactory, GCVEFrame, Licenses
 from operator import itemgetter
+from datetime import datetime
 
 
 windows = re.compile('.*windows.*', re.IGNORECASE)
@@ -49,7 +50,7 @@ class PriceList:
                 if not all(region in data['regions'] for region in self.regions):
                     return False
                 self.lists = data["lists"]
-                self.last_update = ctime(data["last_update"])
+                self.last_update = datetime.fromtimestamp(data["last_update"]).strftime("%Y-%m-%d")
                 self.regions = data['regions']
                 print(f"WARNING! using cache file 'price_loader.json' from {self.last_update}\n\t{self.count()}")
                 print(f"\tuse -nc to avoid caching or delete the file")
@@ -73,7 +74,7 @@ class PriceList:
 
 
     def count(self):
-        return "loaded {predefined} standard types, {custom} custom types, {disk} disk prices and {os} O.S. prices.".format(
+        return "loaded {predefined} pre-defined types, {custom} customizable families, {disk} disk prices and {os} O.S. prices.".format(
             predefined=len(self.lists['predefined']),
             custom=len(self.lists['custom']),
             disk=len(self.lists['disk']),
