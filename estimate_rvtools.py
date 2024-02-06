@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime
 from genericpath import exists
 import sys
-from price_loader import PriceList
+from pricing import PriceList, parse_args
 from util import CellFormat
 import openpyxl
 import operator
@@ -20,16 +20,6 @@ commit_colors = {
     "1Y":"FFF5CE",
     "3Y": "DDE8CB"
 }
-
-def get_parser(h):
-    parser = argparse.ArgumentParser(add_help=h)
-    parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=True)
-    parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
-    parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
-    parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
-    parser.add_argument("-l", "--local", action='store_true', help="use local html")
-    parser.add_argument("-o", "--optimization", nargs='?', type=int, choices=range(1,50),  default=0, help="cpu optimization %", required=False)
-    return parser
 
 def process_row(sheet, row_index, row, regions, columns, optimization):
 
@@ -335,12 +325,12 @@ def add_gcve_footer(sheet, books_qtty):
             bold.value('''=SUM(E{first}:E{last})'''.format(first=first_sum_row, last=last_sum_row))
         ])
 
-def add_summary_disclamers(sheet, disclamers):
-    for disclamer in disclamers:
-        sheet.append([disclamer])
+def add_summary_disclaimers(sheet, disclaimers):
+    for disclaimer in disclaimers:
+        sheet.append([disclaimer])
         sheet.merge_cells(start_row=sheet.max_row, start_column=1, end_row=sheet.max_row, end_column=6)
     sheet.append([])
-    initial_row_offset = len(disclamers) + 1
+    initial_row_offset = len(disclaimers) + 1
 
 def process_file(book_name, output, regions, regions_qtty, optimization):
         book = openpyxl.load_workbook(book_name, read_only=True, data_only=True)
@@ -362,7 +352,7 @@ def process_file(book_name, output, regions, regions_qtty, optimization):
         fit_sheet_columns(sheet)
 
 def create_summary(summary, regions, regions_qtty, books, books_qtty):
-    add_summary_disclamers(summary, ['*** on-demand prices includes sustained use discounts ***'])
+    add_summary_disclaimers(summary, ['*** on-demand prices includes sustained use discounts ***'])
     # add a summarization table per region to the Summary sheet
     for region_index, region_name in enumerate(regions):
         add_region_header(summary, region_index, region_name)
@@ -427,8 +417,7 @@ def validate_books(books):
 
 
 if (__name__=="__main__"):
-    p = get_parser(h=True)
-    args = p.parse_args()
+    args = parse_args(require_sheet=True)
     validate_books(args.sheets)
     price_list = PriceList(args.regions, args.period, args.nocache, args.local)
     process_files(args.sheets, args.regions, (1 - (args.optimization/100)))

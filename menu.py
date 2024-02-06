@@ -3,34 +3,11 @@
 
 
 from datetime import datetime
-from price_loader import PriceList
-import argparse
+from pricing import PriceList, parse_args
 from consolemenu import *
 from consolemenu.items import *
-from consolemenu.prompt_utils import PromptUtils, BaseValidator, InputResult
+from consolemenu.prompt_utils import PromptUtils, InputResult
 from tabulate import tabulate
-
-def setup_monitoring_gcp():
-    from opentelemetry import metrics
-    from opentelemetry.exporter.cloud_monitoring import (
-        CloudMonitoringMetricsExporter,
-    )
-    from opentelemetry.sdk.metrics import MeterProvider
-
-    metrics.set_meter_provider(MeterProvider())
-    meter = metrics.get_meter(__name__)
-    metrics.get_meter_provider().start_pipeline(
-        meter, CloudMonitoringMetricsExporter(), 5
-    )
-
-    # meter.crea
-
-    requests_counter = meter.create_counter(
-        name="request_counter",
-        description="number of requests",
-        unit="1",
-        value_type=int,
-    )
 
 def read_float_value(label):
     try:
@@ -62,15 +39,6 @@ def select_best_vm(commit, region):
 def print_list(list):
     print(tabulate(list, headers="keys"), '\n')
     utils.enter_to_continue()
-
-
-def get_parser(h):
-    parser = argparse.ArgumentParser(add_help=h)
-    parser.add_argument("-r", "--regions", nargs='*', help="regions to be loaded", required=True)
-    parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
-    parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
-    parser.add_argument("-l", "--local", action='store_true', help="use local html")
-    return parser
 
 
 def print_selection(commit, region):
@@ -116,8 +84,7 @@ def build_menu():
 
 
 if (__name__=="__main__"):
-    p = get_parser(h=True)
-    args = p.parse_args()
+    args = parse_args()
     price_list = PriceList(args.regions, args.period, args.nocache, args.local)
     menu = build_menu()
     utils = PromptUtils(menu.screen)
