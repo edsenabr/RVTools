@@ -60,7 +60,7 @@ def build_menu():
         submenu_item = SubmenuItem(region, commit_menu, region_menu, should_exit=True)
         region_menu.append_item(submenu_item)
 
-    region_item = SubmenuItem("Select best VM", region_menu, menu)
+    region_item = SubmenuItem("Select cheapest VM", region_menu, menu)
     menu.append_item(region_item)
 
     menu.append_item(
