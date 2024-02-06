@@ -4,8 +4,7 @@ env/*
 *.xls*
 _oldstuff/*
 test.py
-price_loader.json
-price_loader-old.json
-.vscode/launch.json
+price_loader*.json
+.vscode
 html
 pricing/__pycache__/
