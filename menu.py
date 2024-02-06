@@ -2,7 +2,6 @@
 "exec" "$(dirname $0)/env/bin/python3" "$0" "$@"
 
 
-from datetime import datetime
 from pricing import PriceList, parse_args
 from consolemenu import *
 from consolemenu.items import *
@@ -11,7 +10,7 @@ from tabulate import tabulate
 
 def read_float_value(label):
     try:
-        return float(input("%s:\t\t" % label))
+        return float(input(label))
     except ValueError:
         print ("Invalid value, enter a numeric data in the form of 00[.0]")
         return read_float_value(label)
@@ -21,11 +20,11 @@ def read_float_value(label):
 
 
 def select_best_vm(commit, region):
-    cpu = read_float_value("cpu")
+    cpu = read_float_value("vCPUs:\t\t")
     if (cpu is None):
         return
 
-    memory = read_float_value("memory")
+    memory = read_float_value("Memory (GB):\t")
     if (memory is None):
         return
 
@@ -46,8 +45,7 @@ def print_selection(commit, region):
     utils.enter_to_continue()
 
 def build_menu():
-    when = datetime.fromtimestamp(price_list.last_update).strftime("%Y-%m-%d")
-    menu = ConsoleMenu("GCP PriceList Loader", "Loaded on {when} prices for regions: ".format(when=when) + ', '.join(args.regions), epilogue_text=price_list.count(), prologue_text="Select an option:")
+    menu = ConsoleMenu("GCP PriceList Loader", "Prices loaded on {when} for regions: ".format(when=price_list.last_update) + ', '.join(args.regions), epilogue_text=price_list.count(), prologue_text="Select an option:")
 
     region_menu = ConsoleMenu("Choose a region", clear_screen=False)
     for region in args.regions:
@@ -69,10 +67,10 @@ def build_menu():
         FunctionItem("List pre-defined types", print_list, args=[price_list.lists['predefined']])
     )
     menu.append_item(
-        FunctionItem("List custom types", print_list, args=[price_list.lists['custom']])
+        FunctionItem("List customizable families", print_list, args=[price_list.lists['custom']])
     )
     menu.append_item(
-        FunctionItem("List standard prices", print_list, args=[price_list.lists['standard']])   
+        FunctionItem("List unit price for pre-defined types", print_list, args=[price_list.lists['standard']])   
     )
     menu.append_item(
         FunctionItem("List disk prices", print_list, args=[price_list.lists['disk']])
