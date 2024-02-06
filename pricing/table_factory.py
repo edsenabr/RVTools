@@ -96,13 +96,9 @@ class TableFactory:
 
 
 
-        match rows[0]['cells'][0]:
-            case "Machine type":
-                return PredefinedTable(rows, family_name, period)
-
-            case "Item":
-                table = BaseTable(rows, family_name, period, id_parts.group(2))
-                return table
-
-            case _:
-                return None
+        if (rows[0]['cells'][0] == "Machine type"):
+            return PredefinedTable(rows, family_name, period)
+        elif (rows[0]['cells'][0] == "Item"):
+            return BaseTable(rows, family_name, period, id_parts.group(2))
+        else:
+            return None
