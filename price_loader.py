@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
-from pricing import TableFactory, GCVEFrame, Licences
+from pricing import TableFactory, GCVEFrame, Licenses
 
 windows = re.compile('.*windows.*', re.IGNORECASE)
 sles = re.compile('.*SUSE.*', re.IGNORECASE)
@@ -127,7 +127,7 @@ class PriceList:
             self.lists[frame.name].extend(pricing)
 
     def parse_premium_images(self) -> dict:
-        licenses = Licences(self.soup, self.period)
+        licenses = Licenses(self.soup, self.period)
         if not licenses is None:
             self.lists[licenses.name].update(licenses.parse())
 

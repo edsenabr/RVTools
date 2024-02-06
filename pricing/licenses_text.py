@@ -1,7 +1,7 @@
 import re
 cleanup = re.compile('[^0-9\.]+')
 
-class Licences:
+class Licenses:
     def __init__(self, soup, period) -> None:
         self.name = "images"
         self.soup = soup
