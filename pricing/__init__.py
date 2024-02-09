@@ -9,12 +9,12 @@ from pricing.licenses_text import Licenses
 from pricing.price_list import PriceList
 
 def parse_args(require_sheet=False):
-    parser = argparse.ArgumentParser(True)
+    parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--regions", nargs='*', help="region to be loaded", required=True)
     parser.add_argument("-p", "--period", nargs='?', help="regions to be loaded", default="monthly" , choices=['monthly', 'hourly'])
     parser.add_argument("-nc", "--nocache", action='store_true', help="ignore cache")
     parser.add_argument("-l", "--local", action='store_true', help="use local html")
     if (require_sheet):
         parser.add_argument("-s", "--sheets", nargs='*', help="RVTools Spreadsheet", required=True)
-        parser.add_argument("-o", "--optimization", nargs='?', type=int, choices=range(1,50),  default=0, help="cpu optimization %", required=False)
+        parser.add_argument("-o", "--optimization", nargs='?', type=int, choices=range(1,51),  default=0, help="cpu optimization %%", required=False)
     return parser.parse_args()
