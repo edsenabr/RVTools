@@ -44,7 +44,7 @@ Because of that, over time I've created and improved this script that, in a nuts
 
 This script is written in Python **`3`**, and it is recommended to create a virtual environment for installing its dependencies. Please refer to [requirements.txt](requirements.txt) to see the current dependencies, as those might evolve during time and I won't be updating this readme to address those changes.
 
-There is no special instructions for installing this script. Just install Python, create a virtual environment and install dependencies via PIP.
+There is no special instructions for installing this script. Just install Python, create a virtual environment, clone this repo and and install dependencies via PIP.
 
 
 <!-- USAGE EXAMPLES -->
